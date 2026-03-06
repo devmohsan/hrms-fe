@@ -9,9 +9,17 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@types/next-auth": "^3.13.0",
+    "axios": "^1.13.5",
+    "cors": "^2.8.6",
+    "formik": "^2.4.9",
+    "framer-motion": "^12.34.3",
+    "lucide-react": "^0.575.0",
     "next": "16.1.6",
+    "next-auth": "^4.24.13",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "yup": "^1.7.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
