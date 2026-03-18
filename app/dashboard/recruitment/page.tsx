@@ -20,7 +20,8 @@ import {
   Award,
   Share2,
   X,
-  HelpCircle
+  HelpCircle,
+  Edit
 } from 'lucide-react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -409,6 +410,16 @@ function JobCard({ job, index }: { job: any; index: number }) {
                           <HelpCircle size={14} />
                         </div>
                         <span className="text-[10px] font-black uppercase tracking-widest">Assessment</span>
+                      </Link>
+
+                      <Link 
+                        href={`/dashboard/recruitment/${job.id}/edit`}
+                        className="flex items-center gap-3 w-full p-3 hover:bg-gray-50 rounded-xl transition-colors text-gray-600 hover:text-primary-blue group/item"
+                      >
+                        <div className="w-8 h-8 bg-warning-orange/5 rounded-lg flex items-center justify-center group-hover/item:bg-warning-orange group-hover/item:text-white transition-colors">
+                          <Edit size={14} />
+                        </div>
+                        <span className="text-[10px] font-black uppercase tracking-widest">Edit Job</span>
                       </Link>
                     </motion.div>
                   )}

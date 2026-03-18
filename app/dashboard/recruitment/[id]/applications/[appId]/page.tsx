@@ -30,7 +30,9 @@ import {
   Save,
   Copy,
   ExternalLink as LinkIcon,
-  ClipboardList
+  ClipboardList,
+  Video,
+  MoreHorizontal
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axiosInstance from '@/lib/axios';
@@ -57,6 +59,87 @@ export default function ApplicationDetailPage() {
     duration_minutes: 30,
     interview_details: 'Initial technical screening'
   });
+
+  const [isInterviewModalOpen, setIsInterviewModalOpen] = useState(false);
+  const [isInterviewScheduling, setIsInterviewScheduling] = useState(false);
+  const [interviewScheduleSuccess, setInterviewScheduleSuccess] = useState(false);
+  const [interviewScheduleError, setInterviewScheduleError] = useState<string | null>(null);
+  const [interviewResponse, setInterviewResponse] = useState<any>(null);
+  const [interviewData, setInterviewData] = useState({
+    interviewer_name: '',
+    interviewer_email: '',
+    start_time: '',
+    duration: 45,
+    topic: 'Technical Interview',
+    timezone: 'Asia/Karachi'
+  });
+  const [isOfferModalOpen, setIsOfferModalOpen] = useState(false);
+  const [isSendingOffer, setIsSendingOffer] = useState(false);
+  const [offerSuccess, setOfferSuccess] = useState(false);
+  const [offerError, setOfferError] = useState<string | null>(null);
+  const [offerData, setOfferData] = useState({
+    role: '',
+    salary: '',
+    joining_date: '',
+    additional_notes: 'Welcome aboard!'
+  });
+
+  useEffect(() => {
+    if (jobInfo && !offerData.role) {
+      setOfferData(prev => ({ ...prev, role: jobInfo.role_title }));
+    }
+  }, [jobInfo]);
+
+  const handleOfferSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSendingOffer(true);
+    setOfferError(null);
+    setOfferSuccess(false);
+
+    try {
+      const payload = {
+        application_id: Number(appId),
+        role: offerData.role,
+        salary: offerData.salary,
+        joining_date: offerData.joining_date,
+        additional_notes: offerData.additional_notes
+      };
+
+      const response = await axiosInstance.post('/offer-letters/send', payload);
+      
+      if (response.data.success) {
+        setOfferSuccess(true);
+      }
+    } catch (err: any) {
+      setOfferError(err.response?.data?.message || "Failed to send offer letter. Please try again.");
+    } finally {
+      setIsSendingOffer(false);
+    }
+  };
+
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
+  const handleStatusUpdate = async (newStatus: string) => {
+    if (!window.confirm(`Are you sure you want to update status to ${newStatus}?`)) return;
+    
+    setIsUpdatingStatus(true);
+    try {
+      const response = await axiosInstance.patch(`/applications/${appId}/status`, {
+        status: newStatus
+      });
+      
+      if (response.data.success) {
+        setApplication((prev: any) => ({ ...prev, status: newStatus }));
+        // If status becomes hired, pre-fill role for offer letter if not already there
+        if (newStatus === 'hired' && !offerData.role) {
+          setOfferData(prev => ({ ...prev, role: jobInfo?.role_title || '' }));
+        }
+      }
+    } catch (err: any) {
+      alert(err.response?.data?.message || "Failed to update status.");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -142,6 +225,42 @@ export default function ApplicationDetailPage() {
     }
   }, [activeTab, appId, assessmentResponse]);
 
+  const handleInterviewScheduleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsInterviewScheduling(true);
+    setInterviewScheduleError(null);
+    setInterviewScheduleSuccess(false);
+
+    try {
+      const payload = {
+        application_id: Number(appId),
+        interviewer_name: interviewData.interviewer_name,
+        interviewer_email: interviewData.interviewer_email,
+        start_time: new Date(interviewData.start_time).toISOString(),
+        duration: Number(interviewData.duration),
+        topic: interviewData.topic,
+        timezone: interviewData.timezone
+      };
+
+      const response = await axiosInstance.post('/interviews/schedule', payload);
+      
+      if (response.data.success) {
+        setInterviewResponse(response.data.data);
+        setInterviewScheduleSuccess(true);
+        // Status updates to shortlisted via API automatically as per user requirements
+        // Refresh application data to reflect status change
+        const appResponse = await axiosInstance.get(`/applications/${appId}`);
+        if (appResponse.data.success) {
+          setApplication(appResponse.data.application || appResponse.data.data);
+        }
+      }
+    } catch (err: any) {
+      setInterviewScheduleError(err.response?.data?.message || "Failed to schedule Zoom interview. Please try again.");
+    } finally {
+      setIsInterviewScheduling(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
@@ -205,22 +324,67 @@ export default function ApplicationDetailPage() {
                 <span className="px-3 py-1 bg-primary-blue/10 text-primary-blue border border-primary-blue/20 rounded-full text-[9px] font-black uppercase tracking-widest">
                   {jobInfo?.role_title || 'Position Matrix'}
                 </span>
-                <span className="px-3 py-1 bg-success-green/10 text-success-green border border-success-green/20 rounded-full text-[9px] font-black uppercase tracking-widest">
-                  {application.status || 'Verified'}
-                </span>
+                
+                <div className="relative group/status flex items-center">
+                  <select 
+                    value={application.status}
+                    disabled={isUpdatingStatus}
+                    onChange={(e) => handleStatusUpdate(e.target.value)}
+                    className={`appearance-none px-4 py-1 pr-8 rounded-full text-[9px] font-black uppercase tracking-widest border transition-all cursor-pointer outline-none ${
+                      application.status === 'hired' ? 'bg-success-green/10 text-success-green border border-success-green/20' :
+                      application.status === 'shortlisted' ? 'bg-indigo-50 text-indigo-600 border-indigo-100' :
+                      application.status === 'rejected' ? 'bg-red-50 text-red-500 border-red-100' :
+                      application.status === 'under_review' || application.status === 'screening' ? 'bg-warning-orange/10 text-warning-orange border-warning-orange/20' :
+                      'bg-gray-100 text-gray-500 border-gray-200'
+                    }`}
+                  >
+                    <option value="applied">Applied</option>
+                    <option value="screening">Screening</option>
+                    <option value="shortlisted">Shortlisted</option>
+                    <option value="interview_scheduled">Interview Scheduled</option>
+                    <option value="rejected">Rejected</option>
+                    <option value="hired">Hired</option>
+                  </select>
+                  <div className="absolute right-2.5 pointer-events-none text-current opacity-50">
+                    <MoreHorizontal size={10} />
+                  </div>
+                  {isUpdatingStatus && (
+                    <div className="ml-2">
+                      <Loader2 size={12} className="animate-spin text-primary-blue" />
+                    </div>
+                  )}
+                </div>
               </div>
               <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest mt-1">Applicant Review Dashboard</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
-             <button 
-                onClick={() => setIsScheduleModalOpen(true)}
-                className="bg-primary-blue text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-900 transition-all shadow-xl shadow-primary-blue/20 flex items-center gap-3"
-              >
-                Schedule
-                <Calendar size={16} />
-              </button>
+              {application.status === 'hired' ? (
+                <button 
+                  onClick={() => setIsOfferModalOpen(true)}
+                  className="bg-success-green text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-900 transition-all shadow-xl shadow-success-green/20 flex items-center gap-3"
+                >
+                  Send Offer Letter
+                  <Mail size={16} />
+                </button>
+              ) : application.status === 'applied' ? (
+                <button 
+                  onClick={() => setIsScheduleModalOpen(true)}
+                  className="bg-primary-blue text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-900 transition-all shadow-xl shadow-primary-blue/20 flex items-center gap-3"
+                >
+                  Schedule
+                  <Calendar size={16} />
+                </button>
+              ) : (
+                <button 
+                  onClick={() => setIsInterviewModalOpen(true)}
+                  className="bg-primary-blue text-white px-8 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-900 transition-all shadow-xl shadow-primary-blue/20 flex items-center gap-3"
+                >
+                  Schedule Interview
+                  <Video size={16} />
+                </button>
+              )}
              <div className="hidden lg:flex items-center gap-8 mx-4">
                 <HeaderStat icon={<Globe size={14}/>} label="Channel" value="Direct Apply" />
                 <HeaderStat icon={<ShieldCheck size={14}/>} label="Review" value="Profile Verified" />
@@ -569,7 +733,356 @@ export default function ApplicationDetailPage() {
         appName={application.full_name}
         scheduledId={scheduledId}
       />
+
+      <ScheduleInterviewModal 
+        isOpen={isInterviewModalOpen}
+        onClose={() => setIsInterviewModalOpen(false)}
+        data={interviewData}
+        setData={setInterviewData}
+        onSubmit={handleInterviewScheduleSubmit}
+        loading={isInterviewScheduling}
+        success={interviewScheduleSuccess}
+        error={interviewScheduleError}
+        appName={application.full_name}
+        interviewResponse={interviewResponse}
+      />
+
+      <SendOfferLetterModal 
+        isOpen={isOfferModalOpen}
+        onClose={() => setIsOfferModalOpen(false)}
+        data={offerData}
+        setData={setOfferData}
+        onSubmit={handleOfferSubmit}
+        loading={isSendingOffer}
+        success={offerSuccess}
+        error={offerError}
+        appName={application.full_name}
+      />
     </div>
+  );
+}
+
+function SendOfferLetterModal({ isOpen, onClose, data, setData, onSubmit, loading, success, error, appName }: any) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-md"
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="relative w-full max-w-xl bg-white rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden"
+          >
+            <div className="p-10 md:p-14">
+              <div className="flex items-center justify-between mb-10">
+                <div className="flex items-center gap-5">
+                   <div className="w-14 h-14 bg-success-green/10 rounded-2xl flex items-center justify-center text-success-green">
+                      <FileText size={28} />
+                   </div>
+                   <div>
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight">Send Offer Letter</h3>
+                      <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest mt-1">Candidate: {appName}</p>
+                   </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-100 p-5 rounded-2xl flex items-center gap-3 text-red-600 mb-8">
+                  <XCircle size={18} />
+                  <p className="text-xs font-bold uppercase tracking-wide">{error}</p>
+                </div>
+              )}
+
+              {success ? (
+                <div className="space-y-8 text-center">
+                  <div className="bg-success-green/10 border border-success-green/20 p-12 rounded-[3.5rem] flex flex-col items-center gap-6">
+                     <div className="w-24 h-24 bg-success-green text-white rounded-full flex items-center justify-center shadow-2xl shadow-success-green/30">
+                        <CheckCircle2 size={48} />
+                     </div>
+                     <div>
+                       <h4 className="text-2xl font-black text-gray-900 mb-2">Offer Dispatched</h4>
+                       <p className="text-gray-500 text-sm font-medium leading-relaxed">
+                         The formal offer letter has been generated and emailed to <strong>{appName}</strong>.
+                       </p>
+                     </div>
+                  </div>
+
+                  <button 
+                    onClick={onClose}
+                    className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-primary-blue transition-all"
+                  >
+                    Return to Profile
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={onSubmit} className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Position Title</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={data.role}
+                        onChange={(e) => setData({ ...data, role: e.target.value })}
+                        placeholder="e.g. Senior Software Engineer"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Offered Salary</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={data.salary}
+                        onChange={(e) => setData({ ...data, salary: e.target.value })}
+                        placeholder="e.g. 150,000 PKR / month"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all shadow-sm"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Joining Date</label>
+                      <input 
+                        type="date" 
+                        required
+                        value={data.joining_date}
+                        onChange={(e) => setData({ ...data, joining_date: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all shadow-sm"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-2 block">Additional Notes / Welcome Message</label>
+                      <textarea 
+                        rows={3}
+                        value={data.additional_notes}
+                        onChange={(e) => setData({ ...data, additional_notes: e.target.value })}
+                        placeholder="Welcome to the team!"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all resize-none shadow-sm"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 space-y-3">
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-success-green transition-all shadow-xl shadow-gray-900/10 flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 className="animate-spin" size={18} /> : <FileText size={18} />}
+                      {loading ? 'Generating Offer PDF...' : 'Deploy Offer Letter'}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={onClose}
+                      className="w-full bg-gray-50 text-gray-400 py-4 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-gray-100 hover:text-gray-600 transition-all transition-all"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
+function ScheduleInterviewModal({ isOpen, onClose, data, setData, onSubmit, loading, success, error, appName, interviewResponse }: any) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-gray-900/60 backdrop-blur-md"
+          />
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            className="relative w-full max-w-xl bg-white rounded-[3rem] shadow-2xl border border-gray-100 overflow-hidden"
+          >
+            <div className="p-10 md:p-14">
+              <div className="flex items-center justify-between mb-10">
+                <div className="flex items-center gap-5">
+                   <div className="w-14 h-14 bg-primary-blue/10 rounded-2xl flex items-center justify-center text-primary-blue">
+                      <Video size={28} />
+                   </div>
+                   <div>
+                      <h3 className="text-2xl font-black text-gray-900 tracking-tight">Schedule Interview</h3>
+                      <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest mt-1">Candidate: {appName}</p>
+                   </div>
+                </div>
+                <button 
+                  type="button"
+                  onClick={onClose}
+                  className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400 hover:bg-gray-100 hover:text-gray-900 transition-all"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-100 p-5 rounded-2xl flex items-center gap-3 text-red-600 mb-8">
+                  <XCircle size={18} />
+                  <p className="text-xs font-bold uppercase tracking-wide">{error}</p>
+                </div>
+              )}
+
+              {success ? (
+                <div className="space-y-8">
+                  <div className="bg-success-green/10 border border-success-green/20 p-10 rounded-[2.5rem] flex flex-col items-center gap-4 text-center">
+                     <div className="w-20 h-20 bg-success-green text-white rounded-full flex items-center justify-center shadow-lg shadow-success-green/20">
+                        <CheckCircle2 size={40} />
+                     </div>
+                     <h4 className="text-xl font-black text-gray-900">Interview Scheduled</h4>
+                     <p className="text-gray-500 text-sm font-medium">Zoom meeting created and invitation email dispatched.</p>
+                  </div>
+
+                  <div className="bg-gray-50 p-8 rounded-[2rem] border border-gray-100 space-y-4">
+                      <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Instant Access Protocols</p>
+                      <div className="grid grid-cols-1 gap-3">
+                        <button 
+                          onClick={() => window.open(`/interview/${interviewResponse?.meeting_id}?role=1&name=${encodeURIComponent(data.interviewer_name)}`, '_blank')}
+                          className="flex items-center justify-between p-4 bg-white border border-gray-200 rounded-2xl hover:border-primary-blue transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-primary-blue/10 text-primary-blue rounded-xl flex items-center justify-center">
+                              <Video size={18} />
+                            </div>
+                            <div className="text-left">
+                              <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Join as Host</p>
+                              <p className="text-[9px] font-bold text-gray-400">Interviewer Console</p>
+                            </div>
+                          </div>
+                          <ChevronLeft className="rotate-180 text-gray-300 group-hover:text-primary-blue transition-colors" size={16} />
+                        </button>
+
+                        <button 
+                          onClick={() => window.open(`/interview/${interviewResponse?.meeting_id}?role=0&name=${encodeURIComponent(appName)}&pwd=${interviewResponse?.password || ''}`, '_blank')}
+                          className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl hover:border-success-green transition-all group"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 bg-success-green/10 text-success-green rounded-xl flex items-center justify-center">
+                              <User size={18} />
+                            </div>
+                            <div className="text-left">
+                              <p className="text-[10px] font-black text-gray-900 uppercase tracking-widest">Join as Candidate</p>
+                              <p className="text-[9px] font-bold text-gray-400">Applicant Portal Preview</p>
+                            </div>
+                          </div>
+                          <ChevronLeft className="rotate-180 text-gray-300 group-hover:text-success-green transition-colors" size={16} />
+                        </button>
+                      </div>
+                  </div>
+
+                  <button 
+                    onClick={onClose}
+                    className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-primary-blue transition-all"
+                  >
+                    Close Dashboard
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={onSubmit} className="space-y-8">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="md:col-span-2">
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3 block">Meeting Topic</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={data.topic}
+                        onChange={(e) => setData({ ...data, topic: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3 block">Interviewer Name</label>
+                      <input 
+                        type="text" 
+                        required
+                        value={data.interviewer_name}
+                        onChange={(e) => setData({ ...data, interviewer_name: e.target.value })}
+                        placeholder="e.g. John Doe"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3 block">Interviewer Email</label>
+                      <input 
+                        type="email" 
+                        required
+                        value={data.interviewer_email}
+                        onChange={(e) => setData({ ...data, interviewer_email: e.target.value })}
+                        placeholder="interviewer@company.com"
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3 block">Start Date & Time</label>
+                      <input 
+                        type="datetime-local" 
+                        required
+                        value={data.start_time}
+                        onChange={(e) => setData({ ...data, start_time: e.target.value })}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1 mb-3 block">Duration (Min)</label>
+                      <input 
+                        type="number" 
+                        required
+                        min="15"
+                        value={data.duration}
+                        onChange={(e) => setData({ ...data, duration: Number(e.target.value) })}
+                        className="w-full bg-gray-50 border border-gray-100 rounded-2xl p-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-primary-blue outline-none transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button 
+                      type="submit"
+                      disabled={loading}
+                      className="w-full bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-primary-blue transition-all shadow-2xl shadow-gray-900/20 flex items-center justify-center gap-3 disabled:opacity-50"
+                    >
+                      {loading ? <Loader2 className="animate-spin" size={18} /> : <Video size={18} />}
+                      {loading ? 'Generating Zoom Link...' : 'Schedule Zoom Interview'}
+                    </button>
+                    <button 
+                      type="button"
+                      onClick={onClose}
+                      className="w-full mt-4 bg-gray-50 text-gray-400 py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-gray-100 hover:text-gray-600 transition-all active:scale-95"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 

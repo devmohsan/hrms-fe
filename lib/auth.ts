@@ -19,6 +19,8 @@ export const authOptions: NextAuthOptions = {
             password: credentials.password,
           });
 
+          // console.log("Auth authorize response:", response);
+
           if (response.status === 200 || response.status === 201) {
             const userData = response.data?.data;
             if (userData && userData.token) {

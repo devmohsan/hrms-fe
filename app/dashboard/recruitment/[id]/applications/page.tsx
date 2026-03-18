@@ -16,14 +16,13 @@ import {
   FileText, 
   ExternalLink,
   Loader2,
-  CheckCircle2,
-  XCircle,
   Clock,
   Briefcase,
   DollarSign,
   Eye,
   ArrowUpRight,
-  Zap
+  Zap,
+  XCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import axiosInstance from '@/lib/axios';
@@ -36,38 +35,85 @@ export default function JobApplicationsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showFilters, setShowFilters] = useState(false);
   const [jobInfo, setJobInfo] = useState<any>(null);
+  
+  // New Filter States
+  const [filters, setFilters] = useState({
+    status: '',
+    location: '',
+    experience: '',
+    expected_salary: '',
+  });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setLoading(true);
-        // Fetch Job Info
+  // State for Pagination
+  const [pagination, setPagination] = useState({
+    total: 0,
+    page: 1,
+    limit: 10,
+    totalPages: 0
+  });
+
+  const fetchData = async (resetPage = false) => {
+    try {
+      setLoading(true);
+      
+      // Fetch Job Info if not already fetched
+      if (!jobInfo) {
         const jobResponse = await axiosInstance.get(`/jobs/${id}`);
         if (jobResponse.data.success) {
           setJobInfo(jobResponse.data.data);
         }
-
-        // Fetch Applications
-        const response = await axiosInstance.get(`/applications/job/${id}`);
-        if (response.data.success) {
-          setApplications(response.data.applications || []);
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.message || "Failed to load application matrix.");
-      } finally {
-        setLoading(false);
       }
-    };
+
+      // Prepare query parameters
+      const params: any = {
+        page: resetPage ? 1 : pagination.page,
+        limit: pagination.limit,
+      };
+
+      if (searchQuery) params.search = searchQuery;
+      if (filters.status) params.status = filters.status;
+      if (filters.location) params.location = filters.location;
+      if (filters.experience) params.experience = filters.experience;
+      if (filters.expected_salary) params.expected_salary = filters.expected_salary;
+
+      const response = await axiosInstance.get(`/applications/job/${id}`, { params });
+      
+      if (response.data.success) {
+        setApplications(response.data.applications || []);
+        if (response.data.pagination) {
+          setPagination(prev => ({
+            ...prev,
+            ...response.data.pagination
+          }));
+        }
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || "Failed to load application matrix.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [id, pagination.page, filters]);
 
-  const filteredApplications = applications.filter(app => 
-    app.full_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    app.email?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Debounced search effect
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchData(true);
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  if (loading) {
+  const handleFilterChange = (e: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFilters(prev => ({ ...prev, [name]: value }));
+  };
+
+  if (loading && applications.length === 0) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
@@ -93,14 +139,14 @@ export default function JobApplicationsPage() {
             <div>
               <h1 className="text-lg font-black text-gray-900 tracking-tight">Candidate Review</h1>
               <p className="text-[10px] font-black text-primary-blue uppercase tracking-widest leading-none mt-0.5">
-                {jobInfo?.role_title} • {applications.length} Applicants
+                {jobInfo?.role_title} • {pagination.total} Applicants
               </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="hidden md:flex items-center gap-2 px-4 py-2 bg-gray-50 rounded-xl border border-gray-100">
               <Users size={14} className="text-gray-400" />
-              <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{applications.length} Total</span>
+              <span className="text-[10px] font-black text-gray-900 uppercase tracking-widest">{pagination.total} Total</span>
             </div>
           </div>
         </div>
@@ -108,51 +154,174 @@ export default function JobApplicationsPage() {
 
       <div className="max-w-7xl mx-auto px-6 mt-10">
         {/* Toolbar */}
-        <div className="flex flex-col md:flex-row gap-4 mb-8 justify-between">
-          <div className="relative flex-grow max-w-xl">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-            <input 
-              type="text"
-              placeholder="Search by candidate name or email..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-100 rounded-[1.5rem] py-4 pl-12 pr-4 outline-none focus:border-primary-blue transition-all font-bold text-xs shadow-sm hover:shadow-md"
-            />
+        <div className="flex flex-col gap-4 mb-8">
+          <div className="flex flex-col md:flex-row gap-4 justify-between">
+            <div className="relative flex-grow max-w-xl">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+              <input 
+                type="text"
+                placeholder="Search by candidate name or email..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-white border border-gray-100 rounded-[1.5rem] py-4 pl-12 pr-4 outline-none focus:border-primary-blue transition-all font-bold text-xs text-gray-900 placeholder:text-gray-400 shadow-sm hover:shadow-md"
+              />
+            </div>
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowFilters(!showFilters)}
+                className={`flex items-center gap-2 px-6 py-4 border rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest transition-all shadow-sm ${
+                  showFilters ? 'bg-primary-blue text-white border-primary-blue' : 'bg-white border-gray-100 text-gray-400 hover:text-primary-blue'
+                }`}
+              >
+                <Filter size={16} />
+                {showFilters ? 'Hide Filters' : 'Filter Applications'}
+              </button>
+            </div>
           </div>
-          <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-6 py-4 bg-white border border-gray-100 rounded-[1.5rem] font-black text-[10px] uppercase tracking-widest text-gray-400 hover:text-primary-blue hover:border-primary-blue/30 transition-all shadow-sm">
-              <Filter size={16} />
-              Filter Applications
-            </button>
-          </div>
+
+          {/* Advanced Filters Bar */}
+          <AnimatePresence>
+            {showFilters && (
+              <motion.div 
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="overflow-hidden"
+              >
+                <div className="bg-white p-6 rounded-[2rem] border border-gray-100 grid grid-cols-1 md:grid-cols-4 gap-4 shadow-sm">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 ml-2">Status</label>
+                    <select 
+                      name="status"
+                      value={filters.status}
+                      onChange={handleFilterChange}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-[10px] font-bold text-gray-900 outline-none focus:border-primary-blue transition-all"
+                    >
+                      <option value="" className="text-gray-900">All Statuses</option>
+                      <option value="applied" className="text-gray-900">Applied</option>
+                      <option value="screening" className="text-gray-900">Screening</option>
+                      <option value="shortlisted" className="text-gray-900">Shortlisted</option>
+                      <option value="interview_scheduled" className="text-gray-900">Interview</option>
+                      <option value="hired" className="text-gray-900">Hired</option>
+                      <option value="rejected" className="text-gray-900">Rejected</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 ml-2">Location</label>
+                    <input 
+                      name="location"
+                      type="text"
+                      placeholder="e.g. London"
+                      value={filters.location}
+                      onChange={handleFilterChange}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-[10px] font-bold text-gray-900 placeholder:text-gray-400 outline-none focus:border-primary-blue transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 ml-2">Min. Experience</label>
+                    <input 
+                      name="experience"
+                      type="number"
+                      placeholder="Years"
+                      value={filters.experience}
+                      onChange={handleFilterChange}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-[10px] font-bold text-gray-900 placeholder:text-gray-400 outline-none focus:border-primary-blue transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase tracking-widest text-gray-400 ml-2">Max. Salary (Expected)</label>
+                    <input 
+                      name="expected_salary"
+                      type="text"
+                      placeholder="Max Amount"
+                      value={filters.expected_salary}
+                      onChange={handleFilterChange}
+                      className="w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-2.5 text-[10px] font-bold text-gray-900 placeholder:text-gray-400 outline-none focus:border-primary-blue transition-all"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
-        {/* Applications List */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          <AnimatePresence mode="popLayout">
-            {filteredApplications.length > 0 ? (
-              filteredApplications.map((app, index) => (
-                <ApplicationCard key={app.id} application={app} index={index} jobId={id} />
-              ))
+        {/* Applications List as List */}
+        <div className="flex flex-col gap-6 relative min-h-[400px]">
+          {loading && applications.length > 0 && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-10 flex items-center justify-center rounded-[3rem]">
+              <Loader2 className="animate-spin text-primary-blue" size={32} />
+            </div>
+          )}
+          
+          <AnimatePresence mode="wait">
+            {applications.length > 0 ? (
+              <div className="flex flex-col gap-6">
+                {applications.map((app, index) => (
+                  <ApplicationCard key={app.id} application={app} index={index} jobId={id} />
+                ))}
+              </div>
             ) : (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                className="col-span-full py-20 bg-white rounded-[3rem] border border-dashed border-gray-200 text-center"
+                className="w-full py-20 bg-white rounded-[3rem] border border-dashed border-gray-200 text-center"
               >
                 <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                   <Search size={32} className="text-gray-200" />
                 </div>
                 <h3 className="text-xl font-black text-gray-900 mb-2 uppercase tracking-tight">No Applications Found</h3>
                 <p className="text-gray-400 font-medium text-sm">No applicants found matching your criteria.</p>
+                <button 
+                  onClick={() => {
+                    setFilters({ status: '', location: '', experience: '', expected_salary: '' });
+                    setSearchQuery('');
+                  }}
+                  className="mt-6 text-primary-blue font-black uppercase tracking-widest text-[10px] hover:underline"
+                >
+                  Clear All Filters
+                </button>
               </motion.div>
             )}
           </AnimatePresence>
         </div>
+
+        {/* Pagination Controls */}
+        {pagination.totalPages > 1 && (
+          <div className="flex justify-center items-center gap-4 mt-12">
+            <button 
+              disabled={pagination.page <= 1 || loading}
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+              className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-primary-blue disabled:opacity-50 transition-all shadow-sm"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <div className="flex gap-2">
+              {[...Array(pagination.totalPages)].map((_, i) => (
+                <button 
+                  key={i}
+                  onClick={() => setPagination(prev => ({ ...prev, page: i + 1 }))}
+                  className={`w-10 h-10 rounded-xl text-[10px] font-black transition-all ${
+                    pagination.page === i + 1 ? 'bg-primary-blue text-white shadow-lg shadow-primary-blue/20' : 'bg-white text-gray-400 border border-gray-100 hover:bg-gray-50'
+                  }`}
+                >
+                  {i + 1}
+                </button>
+              ))}
+            </div>
+            <button 
+              disabled={pagination.page >= pagination.totalPages || loading}
+              onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+              className="p-3 bg-white border border-gray-100 rounded-xl text-gray-400 hover:text-primary-blue disabled:opacity-50 transition-all shadow-sm group"
+            >
+              <ChevronLeft size={18} className="rotate-180" />
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 function ApplicationCard({ application, index, jobId }: { application: any, index: number, jobId: any }) {
   const [showModal, setShowModal] = useState(false);
@@ -165,6 +334,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
       transition={{ delay: index * 0.05 }}
       className="group bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm hover:shadow-2xl hover:shadow-gray-200/50 transition-all relative overflow-hidden"
     >
+      {/* Card Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex gap-4 items-center">
           <div className="w-14 h-14 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 group-hover:scale-110 transition-transform relative">
@@ -176,7 +346,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
             <div className="flex items-center gap-2">
               <h3 className="text-sm font-black text-gray-900 tracking-tight group-hover:text-primary-blue transition-colors line-clamp-1">{application.full_name}</h3>
               <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
-                application.status === 'shortlisted' ? 'bg-success-green/10 text-success-green border border-success-green/20' :
+                application.status === 'shortlisted' || application.status === 'hired' ? 'bg-success-green/10 text-success-green border border-success-green/20' :
                 application.status === 'rejected' ? 'bg-red-50 text-red-500 border border-red-100' :
                 application.status === 'under_review' ? 'bg-warning-orange/10 text-warning-orange border border-warning-orange/20' :
                 'bg-gray-100 text-gray-400 border border-gray-200'
@@ -184,7 +354,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
                 {application.status || 'Pending'}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 mt-0.5 text-gray-400 truncate max-w-[150px]">
+            <div className="flex items-center gap-1.5 mt-0.5 text-gray-400 truncate max-w-[250px]">
               <Mail size={12} />
               <span className="text-[10px] font-medium truncate">{application.email}</span>
             </div>
@@ -195,6 +365,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
         </button>
       </div>
 
+      {/* Card Info */}
       <div className="grid grid-cols-2 gap-3 mb-6">
         <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100/50">
           <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">Location</p>
@@ -227,6 +398,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
         </div>
       </div>
 
+      {/* Card Actions */}
       <div className="space-y-4">
         <div className="flex items-center justify-between text-[9px] font-black uppercase tracking-widest text-gray-400">
           <span>Applied On</span>
@@ -316,6 +488,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
                   </button>
                 </div>
 
+                {/* Modal Content */}
                 <div className="space-y-10">
                   {/* Stats Grid */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -329,7 +502,7 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
                   <div className="bg-gray-50/50 p-8 rounded-[2rem] border border-gray-100">
                     <div className="flex items-center gap-3 mb-4">
                       <FileText size={18} className="text-primary-blue" />
-                      <h4 className="text-[10px] font-black text-gray-900 uppercase tracking-widest text-[11px]">Protocol Introduction</h4>
+                      <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Protocol Introduction</h4>
                     </div>
                     <p className="text-sm text-gray-600 leading-relaxed font-medium">
                       {metadata?.introduction || "No introduction provided."}
@@ -341,63 +514,32 @@ function ApplicationCard({ application, index, jobId }: { application: any, inde
                     <div className="space-y-4">
                       <div className="flex items-center gap-3">
                         <Users size={18} className="text-success-green" />
-                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Additional Assets</h4>
+                        <h4 className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Additional Info</h4>
                       </div>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <ul className="space-y-2">
                         {metadata.custom_info.map((info: any, i: number) => (
-                          <div key={i} className="bg-white border border-gray-100 p-4 rounded-2xl flex items-center justify-between group/asset hover:border-primary-blue transition-colors">
-                            <div>
-                              <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{info.label}</p>
-                              <p className="text-[11px] font-bold text-gray-900 truncate max-w-[180px]">{info.value}</p>
-                            </div>
-                            {info.value.startsWith('http') && (
-                              <a href={info.value} target="_blank" className="p-2 bg-gray-50 rounded-lg text-gray-400 group-hover/asset:text-primary-blue transition-colors">
-                                <ArrowUpRight size={14} />
-                              </a>
-                            )}
-                          </div>
+                          <li key={i} className="text-[10px] font-bold text-gray-600 uppercase tracking-tight">{info}</li>
                         ))}
-                      </div>
+                      </ul>
                     </div>
-                  )}
-                </div>
-
-                <div className="mt-12 pt-8 border-t border-gray-100 flex gap-4">
-                   {application.resume_url && (
-                    <a 
-                      href={application.resume_url?.startsWith('http') ? application.resume_url : `${process.env.NEXT_PUBLIC_RESOURCES_URL}/${application.resume_url}`} 
-                      target="_blank" 
-                      className="flex-grow flex items-center justify-center gap-3 bg-gray-900 text-white py-5 rounded-2xl font-black uppercase tracking-widest text-[11px] hover:bg-primary-blue transition-all shadow-xl shadow-gray-900/10"
-                    >
-                      <FileText size={18} />
-                      Download Assets (Resume)
-                    </a>
                   )}
                 </div>
               </div>
             </motion.div>
           </div>
         )}
+
       </AnimatePresence>
     </motion.div>
   );
 }
 
-function ModalStat({ label, value, icon, color }: any) {
-  const colors: any = {
-    blue: 'bg-primary-blue/10 text-primary-blue',
-    green: 'bg-success-green/10 text-success-green',
-    orange: 'bg-warning-orange/10 text-warning-orange',
-    purple: 'bg-purple-500/10 text-purple-500'
-  };
-
+function ModalStat({ label, value, icon, color }: { label: string, value: string, icon: JSX.Element, color: string }) {
   return (
-    <div className="bg-white border border-gray-100 p-4 rounded-2xl shadow-sm">
-      <div className={`w-8 h-8 ${colors[color]} rounded-xl flex items-center justify-center mb-3`}>
-        {icon}
-      </div>
-      <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">{label}</p>
-      <p className="text-[10px] font-black text-gray-900 uppercase tracking-tight truncate">{value || 'N/A'}</p>
+    <div className={`flex flex-col items-center justify-center p-3 rounded-xl border border-gray-100 bg-${color}-50`}>
+      <div className="mb-2">{icon}</div>
+      <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest leading-none">{label}</p>
+      <p className="text-[10px] font-black text-gray-900">{value || 'N/A'}</p>
     </div>
   );
 }

@@ -9,7 +9,7 @@ const menuItems = [
   { icon: Briefcase, label: 'Recruitment', href: '/dashboard/recruitment' },
   { icon: PieChart, label: 'Payroll', href: '/payroll' },
   { icon: CreditCard, label: 'Subscriptions', href: '/subscriptions' },
-  { icon: Settings, label: 'Settings', href: '/settings' },
+  { icon: Settings, label: 'Settings', href: '/dashboard/settings' },
 ];
 
 export default function Sidebar() {

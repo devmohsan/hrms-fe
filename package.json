@@ -10,24 +10,25 @@
   },
   "dependencies": {
     "@types/next-auth": "^3.13.0",
-    "axios": "^1.13.5",
+    "@zoom/meetingsdk": "^5.1.2",
+    "axios": "^1.13.6",
     "cors": "^2.8.6",
     "formik": "^2.4.9",
     "framer-motion": "^12.34.3",
     "lucide-react": "^0.575.0",
-    "next": "16.1.6",
+    "next": "^14.2.5",
     "next-auth": "^4.24.13",
-    "react": "19.2.3",
-    "react-dom": "19.2.3",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "yup": "^1.7.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@types/react": "18.3.1",
+    "@types/react-dom": "18.3.1",
     "eslint": "^9",
-    "eslint-config-next": "16.1.6",
+    "eslint-config-next": "14.2.5",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
