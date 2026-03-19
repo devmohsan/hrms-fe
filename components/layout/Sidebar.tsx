@@ -4,7 +4,7 @@ import { usePathname } from 'next/navigation';
 
 const menuItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
-  { icon: Users, label: 'Employees', href: '/employees' },
+  { icon: Users, label: 'Employees', href: '/dashboard/employees' },
   { icon: Calendar, label: 'Attendance', href: '/attendance' },
   { icon: Briefcase, label: 'Recruitment', href: '/dashboard/recruitment' },
   { icon: PieChart, label: 'Payroll', href: '/payroll' },

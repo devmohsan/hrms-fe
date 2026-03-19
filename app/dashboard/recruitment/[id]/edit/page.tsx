@@ -67,10 +67,15 @@ export default function EditJobPage() {
       }
     },
     validationSchema,
-    onSubmit: async (values, { setSubmitting }) => {
+    onSubmit: async (values: any, { setSubmitting }) => {
       setError(null);
       try {
-        const response = await axiosInstance.patch(`/jobs/${id}`, values);
+        // Send both role and role_title for compatibility
+        const payload = {
+          ...values,
+          role_title: values.role
+        };
+        const response = await axiosInstance.patch(`/jobs/${id}`, payload);
         if (response.data.success) {
           setSuccess(true);
           setTimeout(() => {
@@ -89,6 +94,7 @@ export default function EditJobPage() {
     try {
       setLoading(true);
       const response = await axiosInstance.get(`/jobs/${id}`);
+      console.log("Fetched Job Identity:", response.data);
       if (response.data.success) {
         const job = response.data.data;
         formik.setValues({
@@ -127,7 +133,7 @@ export default function EditJobPage() {
   };
 
   const removeSkill = (skill: string) => {
-    formik.setFieldValue('skills', formik.values.skills.filter(s => s !== skill));
+    formik.setFieldValue('skills', formik.values.skills.filter((s: string) => s !== skill));
   };
 
   if (loading) {
@@ -177,7 +183,7 @@ export default function EditJobPage() {
                   className="w-full bg-gray-50/50 border border-gray-100 focus:border-primary-blue rounded-2xl py-4 px-6 outline-none transition-all font-bold text-gray-900 shadow-inner"
                 />
                 {formik.touched.role && formik.errors.role && (
-                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.role}</p>
+                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.role as string}</p>
                 )}
               </div>
 
@@ -192,7 +198,7 @@ export default function EditJobPage() {
                   />
                 </div>
                 {formik.touched.location && formik.errors.location && (
-                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.location}</p>
+                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.location as string}</p>
                 )}
               </div>
 
@@ -232,7 +238,7 @@ export default function EditJobPage() {
                   />
                 </div>
                 {formik.touched.experience && formik.errors.experience && (
-                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.experience}</p>
+                  <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.experience as string}</p>
                 )}
               </div>
             </div>
@@ -267,7 +273,7 @@ export default function EditJobPage() {
                   </div>
                   <div className="flex flex-wrap gap-3">
                     <AnimatePresence>
-                      {formik.values.skills.map(skill => (
+                      {formik.values.skills.map((skill: string) => (
                         <motion.span 
                           initial={{ opacity: 0, scale: 0.8 }}
                           animate={{ opacity: 1, scale: 1 }}
@@ -297,7 +303,7 @@ export default function EditJobPage() {
                     />
                   </div>
                   {formik.touched.budget && formik.errors.budget && (
-                    <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.budget}</p>
+                    <p className="text-[9px] font-black text-red-500 uppercase tracking-widest mt-1 ml-2">{formik.errors.budget as string}</p>
                   )}
                </div>
             </div>
@@ -438,6 +444,21 @@ export default function EditJobPage() {
               </div>
 
               <AnimatePresence>
+                {Object.keys(formik.errors).length > 0 && formik.submitCount > 0 && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-red-500 text-[10px] font-black uppercase text-center space-y-1 mb-4"
+                  >
+                    <p className="border-b border-red-500/10 pb-2 mb-2 font-black">Resolve Data Conflicts:</p>
+                    {Object.entries(formik.errors).map(([key, value]) => (
+                      <div key={key} className="flex justify-between gap-4">
+                        <span className="opacity-50">{key}:</span>
+                        <span>{typeof value === 'object' ? JSON.stringify(value) : (value as string)}</span>
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
                 {error && (
                   <motion.div
                     initial={{ opacity: 0, height: 0 }}
